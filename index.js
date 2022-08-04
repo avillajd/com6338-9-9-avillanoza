@@ -1,97 +1,145 @@
-// Your code here
+//capture ref to important DOM elements
+const weatherContainer = document.getElementById('weather')
+const formEl = document.querySelector('form')
+const inputEl = document.querySelector('input')
 
-// API CALL for https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API key}
-
-const weatherDiv = document.getElementById('weather-app')
-const form = document.querySelector('form')
-const input= document.querySelector('input')
-const weatherSection = document.getElementById ('weather')
-
-
-form.onsubmit = function(e){
+formEl.onsubmit = function (e) {
+    // prevent the page from refreshing
     e.preventDefault()
-    const userQuery = input.value
-    const URL = 'https://api.openweathermap.org/data/2.5/weather?q=' + userQuery + '&APPID=d516de008d281295fa4ddf339f86b8a0'
-    if (!userQuery) return
-    form.search.value = ""
 
-    fetch(URL)
-    .then (function(res){
+    //Capture user's input from form field
+    const userInput = inputEl.value.trim()
+
+    //Abort API call if the user enters no value
+    if(!userInput) return
+
+    //call the API and then update page
+    getWeather(userInput)
+        .then(displayWeatherInfo)
+        .catch(displayLocNotFound)
+
+    // reset form field to a blank state
+    inputEl.value = ""
+}
+
+//Calls the OpenWeather API and return object of wether info
+function getWeather(query){
+    //default for US
+    if(!query.includes(",")) query += ',us'
+
+    //return the fetch call which returns a promise
+    //allows us to call .then on this function
+    return fetch(
+        'https://api.openweathermap.org/data/2.5/weather?q=' + query + '&units=imperial&APPID=d516de008d281295fa4ddf339f86b8a0'
+    )
+    .then(function(res){
         return res.json()
-    }) 
-    
-    .then(report)
-    .catch (function(err) {
-        const h2 = document.createElement('h2')
-        h2.textContent = "Location Not Found"
-        weatherSection.appendChild(h2)
-    } )
-   function report(report) {
-    e.preventDefault()
-    console.log(report)
-    weatherSection.innerHTML = ""
-    this.input.value = ""
-    const br = document.createElement('br')
-    const h2 = document.createElement('h2')
-    h2.textContent = report.name + ', ' + report.sys.country
-    weatherSection.appendChild(h2)
+    })
+    .then (function(data){
+        // location is not found, throw error/reject promise
+        if(data.cod === "404")throw new Error('location not found')
 
-    const map = document.createElement('a') // link to google maps.
-    const lat = report.coord.lat
-    const long = report.coord.lon
-    map.href = 'https://www.google.com/maps/search/?api=1&query=' + lat + "," + long
-    map.target = "__BLANK"
-    map.textContent = "Click to view map"
-    map.classList.add('map')
-    weatherSection.appendChild(map)
+        //create weather icon
+        const iconUrl = 'https://openweathermap.org/img/wn/' + 
+        data.weather[0].icon +
+        '@2x.png'
 
-    //Icon
-    const img = document.createElement('img')
-    const weatherIcon = report.weather[0].icon
-    img.src = 'https://openweathermap.org/img/wn/' + weatherIcon + '@2x.png'
-    img.classList.add('weatherIcon')
-    weatherSection.appendChild(img)
-    
-    // Description
-    const descript = document.createElement('p')
-    const weatherDescript = report.weather[0].description
-   
-    descript.textContent = "Currently: " + weatherDescript
-    descript.style.textTransform = 'capitilize'
-    descript.classList.add('descript')
-    weatherSection.appendChild(descript)
+        const description = data.weather[0].description
+        const actualTemp = data.main.temp
+        const feelsLikeTemp = data.main.feels_like
+        const place = data.name + ", " + data.sys.country
 
-    const br = document.createElement('br')
-    weatherSection.appendChild(br)
+        //create JS date object from unix timestamp
+        const updatedAt = new Date(data.dt *1000)
 
-    //actual Temp
-    const actualTemp = document.createElement('p')
-    const weatherActualTemp = report.main.temp
-    const realTemp = Math.floor(weatherActualTemp - 273.15)* 1.8000+ 32.00
-    actualTemp.textContent = "Current: " + realTemp  + "° F" // Try this one 
-    actualTemp.classList.add('actual_Temp')
-    weatherSection.appendChild(actualTemp)
-    console.log(realTemp)
+        //this object is used by displayWeatherInfro to update the HTML
+        return{
+            coords: data.coord.lat + "," + data.coord.lon,
+            description : description,
+            iconUrl : iconUrl,
+            actualTemp: actualTemp,
+            feelsLikeTemp: feelsLikeTemp,
+            place: place,
+            updatedAt: updatedAt
+        }
 
-// Feels Like Temp
-    const fakeTemp = document.createElement('p')
-    const weatherFeelsTemp = report.main.feels_like
-    const feelsLike = Math.floor(weatherFeelsTemp - 273.15)* 1.8000+32.00
-    fakeTemp.textContent = "Feels Like: " + feelsLike  + "° F"
-    fakeTemp.classList.add('feels_like')
-    weatherSection.appendChild(fakeTemp)
+    })
+}
 
-    // updated time
-    const br = document.createElement('br')
-    weatherSection.appendChild(br)
+// Show error message when location isnt found
+function displayLocNotFound(){
+    //clear any previous weather info
+    weatherContainer.innerHTML = "";
 
-    const updateTime = document.createElement('p')
-    const lastTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    //create a H2, add error message, and add to page
+    const errMsg = document.createElement('h2')
+    errMsg.textContent = "Location not found"
+    weatherContainer.appendChild(errMsg)
+}
 
-    updateTime.textContent = "Last Updated: " + lastTime
-    updateTime.classList.add('lastUpdated')
-    weatherSection.appendChild(updateTime)
+//update Html to display weather info
+function displayWeatherInfo(weatherObj){
+    //clears any previous weather info
+    weatherContainer.innerHTML = "";
 
-   }
+    //inserting line break to weather section tag
+    function addBreak(){
+        weatherContainer.appendChild(
+            document.createElement('br')
+        )
+    }
+
+    //Weather location element
+    const placeName= document.createElement('h2')
+    placeName.textContent = weatherObj.place
+    weatherContainer.appendChild(placeName)
+
+    //Link element for location
+    const whereLink = document.createElement('a')
+    whereLink.textContent = "Click to view map"
+    whereLink.href = "https://www.google.com/maps/search/?api=1&query=" + weatherObj.coords
+    whereLink.target = "_BLANK"
+    weatherContainer.appendChild(whereLink)
+
+    //weatherIcon image
+    const icon = document.createElement('img')
+    icon.src = weatherObj.iconUrl
+    weatherContainer.appendChild(icon)
+
+    //weather description
+    const description = document.createElement('p')
+    description.textContent = weatherObj.description
+    description.style.textTransform = 'capitalize'
+    weatherContainer.appendChild(description)
+
+    addBreak()
+
+    //currentTemp
+    const temp = document.createElement('p')
+    temp.textContent = "Current: " + 
+    weatherObj.actualTemp +
+    "℉"
+    weatherContainer.appendChild(temp)
+
+    //feels like temperature
+    const feelsLikeTemp = document.createElement('p')
+    feelsLikeTemp.textContent = "Feels Like: " + 
+    weatherObj.feelsLikeTemp + 
+    "℉"
+    weatherContainer.appendChild(feelsLikeTemp)
+
+    addBreak()
+
+    // time updated
+    const updatedAt = document.createElement('p')
+    updatedAt.textContent = "Last updated: " +
+    weatherObj.updatedAt.toLocaleTimeString (
+        'en-US',
+        {
+            hour: 'numeric', 
+            minute: '2-digit'
+        }
+    )
+    weatherContainer.appendChild(updatedAt)
 }
 
